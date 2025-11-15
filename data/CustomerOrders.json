@@ -1,0 +1,82 @@
+[
+    {
+        "CustomerName": "John Doe",
+        "Email": "john.doe@example.com",
+        "OrderNumber": "#W001",
+        "ProductsOrdered": ["SOBP001", "SOWB004"],
+        "Status": "delivered",
+        "TrackingNumber": "TRK123456789"
+    },
+    {
+        "CustomerName": "Jane Smith",
+        "Email": "jane.smith@example.com",
+        "OrderNumber": "#W002",
+        "ProductsOrdered": ["SOJT005", "SOSB006"],
+        "Status": "in-transit",
+        "TrackingNumber": "TRK987654321"
+    },
+    {
+        "CustomerName": "Alice Johnson",
+        "Email": "alice.johnson@example.com",
+        "OrderNumber": "#W003",
+        "ProductsOrdered": ["SOBT003"],
+        "Status": "fulfilled",
+        "TrackingNumber": null
+    },
+    {
+        "CustomerName": "Bob Brown",
+        "Email": "bob.brown@example.com",
+        "OrderNumber": "#W004",
+        "ProductsOrdered": ["SOSV007", "SOCH010"],
+        "Status": "error",
+        "TrackingNumber": null
+    },
+    {
+        "CustomerName": "Charlie Davis",
+        "Email": "charlie.davis@example.com",
+        "OrderNumber": "#W005",
+        "ProductsOrdered": ["SOBN008"],
+        "Status": "delivered",
+        "TrackingNumber": "TRK112233445"
+    },
+    {
+        "CustomerName": "Diana Evans",
+        "Email": "diana.evans@example.com",
+        "OrderNumber": "#W006",
+        "ProductsOrdered": ["SOGK009", "SOJT005"],
+        "Status": "in-transit",
+        "TrackingNumber": "TRK998877665"
+    },
+    {
+        "CustomerName": "Ethan Harris",
+        "Email": "ethan.harris@example.com",
+        "OrderNumber": "#W007",
+        "ProductsOrdered": ["SOBP001", "SOSB006"],
+        "Status": "fulfilled",
+        "TrackingNumber": null
+    },
+    {
+        "CustomerName": "Fiona Clark",
+        "Email": "fiona.clark@example.com",
+        "OrderNumber": "#W008",
+        "ProductsOrdered": ["SOWB004"],
+        "Status": "error",
+        "TrackingNumber": null
+    },
+    {
+        "CustomerName": "George Hill",
+        "Email": "george.hill@example.com",
+        "OrderNumber": "#W009",
+        "ProductsOrdered": ["SOBT003", "SOGK009"],
+        "Status": "delivered",
+        "TrackingNumber": "TRK445566778"
+    },
+    {
+        "CustomerName": "Hannah Lewis",
+        "Email": "hannah.lewis@example.com",
+        "OrderNumber": "#W010",
+        "ProductsOrdered": ["SOSV007"],
+        "Status": "in-transit",
+        "TrackingNumber": "TRK223344556"
+    }
+]
