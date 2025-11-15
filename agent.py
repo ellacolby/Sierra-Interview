@@ -19,11 +19,10 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
+MODEL_NAME = "gpt-4o-mini"
 
 EMAIL_REGEX = re.compile(r'[\w\.-]+@[\w\.-]+\.\w+')
 ORDER_REGEX = re.compile(r'#?([A-Za-z]\d{3})')
-
-discounts = set()
 
 SYSTEM_PROMPT = """
 You are Sierra Outfitters' helpful outdoor gear assistant. 🌄
@@ -72,10 +71,9 @@ def extract_order_number(text: str) -> str | None:
     if not m:
         return None
 
-    core = m.group(1)  # e.g. "A123" or "a123"
-    # Optional: normalize case to match how it's stored in your JSON
+    core = m.group(1)
     core = core.upper()
-    return f"#{core}"  # always "#A123" style
+    return f"#{core}" 
 
 
 # -----------------------------
@@ -91,6 +89,7 @@ class SierraAgent:
             {"role": "system", "content": SYSTEM_PROMPT}
         ]
 
+        self.discounts: set[str] = set()
         self.tracking_requested = False
         self.current_email: str | None = None
         self.current_order_number: str | None = None
@@ -105,46 +104,42 @@ class SierraAgent:
             self.conversation.append({"role": "system", "content": system_text})
 
         resp = self.client.responses.create(
-            model="gpt-4o-mini",
+            model=MODEL_NAME,
             input=self.conversation,
         )
         reply = resp.output_text
         self.conversation.append({"role": "assistant", "content": reply})
         return reply
 
-    def get_status(self, email: str, order_number: str):
+    def get_status(self, email: str, order_number: str) -> dict | None:
         key = f"{email},{order_number}"
-        logger.debug("looking up order with key=%s in orders=%s", key, self.orders)
+        logger.debug("looking up order with key=%s", key)
         return self.orders.get(key)
 
     def classify_intent(self, user_input: str) -> str:
-        """
-        Ask the LLM to classify the user's intent.
-
-        Returns one of: "TRACKING", "RECOMMENDATION", "PROMOTION", "OTHER".
-        """
         logger.debug("classifying intent with LLM for input: %s", user_input)
+
         messages = [
             {
                 "role": "system",
                 "content": """
-You are an intent classifier for Sierra Outfitters customer chat.
+                You are an intent classifier for Sierra Outfitters customer chat.
 
-Given a single user message, decide whether their primary intent is:
-- TRACKING: they want order status, shipping status, or tracking info.
-- RECOMMENDATION: they want product suggestions, what to buy, gear for a trip, etc.
-- PROMOTION: they are explicitly asking for the Early Risers Promotion or a discount code.
-- OTHER: anything else (returns, general questions, small talk, etc.).
+                Given a single user message, decide whether their primary intent is:
+                - TRACKING: they want order status, shipping status, or tracking info.
+                - RECOMMENDATION: they want product suggestions, what to buy, gear for a trip, etc.
+                - PROMOTION: they are explicitly asking for the Early Risers Promotion or a discount code.
+                - OTHER: anything else (returns, general questions, small talk, etc.).
 
-Respond with exactly one word, in uppercase:
-TRACKING, RECOMMENDATION, PROMOTION, or OTHER.
-""",
+                Respond with exactly one word, in uppercase:
+                TRACKING, RECOMMENDATION, PROMOTION, or OTHER.
+                """,
             },
             {"role": "user", "content": user_input},
         ]
 
         resp = self.client.responses.create(
-            model="gpt-4o-mini",
+            model=MODEL_NAME,
             input=messages,
         )
         label = resp.output_text.strip().upper()
@@ -157,6 +152,7 @@ TRACKING, RECOMMENDATION, PROMOTION, or OTHER.
         if "PROMOTION" in label:
             return "PROMOTION"
         return "OTHER"
+
 
     # ----- tracking -----
 
@@ -219,9 +215,18 @@ TRACKING, RECOMMENDATION, PROMOTION, or OTHER.
         # Missing email or order number – ask them for those details
         logger.debug("missing email or order number for tracking flow")
         error_context = """
-        You could not find an order matching the email and order number provided.
-        Ask the customer to provide an email and order number.
-        Keep the tone warm and outdoorsy.
+        This is a customer service chat agent for Sierra Outfitters.
+
+        If the customer's message doesn't clearly relate to tracking an order,
+        getting product recommendations, or requesting the Early Risers Promotion,
+        politely summarize what you can help with:
+
+        - Check order status and provide tracking links (with email + order number).
+        - Recommend products from the Sierra Outfitters catalog.
+        - Offer a 10% Early Risers discount code between 8–10am PT.
+
+        Then ask a short, friendly question to steer them toward one of these options.
+        Keep the tone warm, outdoorsy, and concise.
         """
         return self._respond(user_text=user_input, system_text=error_context)
 
@@ -239,35 +244,32 @@ TRACKING, RECOMMENDATION, PROMOTION, or OTHER.
             if any(tok in blob for tok in tokens):
                 matches.append(product)
 
-        # Limit to a small number for the prompt
-        top_products = (matches or self.catalog)[:5]
-        logger.debug("matched %d products for recommendations", len(top_products))
+        if matches:
+            top_products = matches[:5]
+            source_description = "matching products from the catalog"
+        else:
+            top_products = self.catalog[:5]
+            source_description = (
+                "a sample of products from the catalog (no strong keyword matches were found)"
+            )
 
-        product_summaries = "\n".join(
-            f"- {json.dumps(p)}" for p in top_products
-        )
+        logger.debug("matched %d products for recommendations", len(matches))
+
+        product_summaries = "\n".join(f"- {json.dumps(p)}" for p in top_products)
 
         system_context = f"""
         The customer is asking for product recommendations.
 
-        You are an outdoorsy gear guide. Before recommending products, do the following:
+        You are an outdoorsy gear guide.
 
-        1. Look at the entire conversation so far.
-           - If the customer has NOT clearly specified what they're looking for
-             (e.g. product type like jacket / backpack / tent, or context such as
-             winter camping, summer hiking, skiing trip, backpacking Europe, etc.),
-             then respond ONLY with 1–2 short clarifying questions to gather those details.
-             Do NOT recommend specific products yet in that case.
-
-        2. If the conversation already includes enough detail about:
-           - activity or trip (e.g. day hike, ski trip, camping),
-           - environment (e.g. cold, wet, desert),
-           - and rough product type,
-           THEN recommend 1–3 products from the catalog below that best match their needs.
-           Briefly explain why you chose each one. Keep the tone outdoorsy and enthusiastic.
-
-        Here are some products from the catalog (in JSON form):
+        You have the following {source_description} (in JSON form):
         {product_summaries}
+
+        Follow these rules:
+        1. If what the customer wants is still unclear, ask 1–2 short clarifying questions
+        (trip type, weather, product type) and do NOT recommend specific products yet.
+        2. If you have enough detail, recommend 1–3 products from the list above and briefly
+        explain why, in an enthusiastic, outdoorsy tone.
         """
 
         return self._respond(user_text=user_input, system_text=system_context)
@@ -294,9 +296,9 @@ TRACKING, RECOMMENDATION, PROMOTION, or OTHER.
                 return f"EARLY-{suffix}"
 
             code = make_code()
-            while code in discounts:
+            while code in self.discounts:
                 code = make_code()
-            discounts.add(code)
+            self.discounts.add(code)
             logger.debug("generated promo code: %s", code)
 
             system_context = f"""
@@ -359,8 +361,12 @@ TRACKING, RECOMMENDATION, PROMOTION, or OTHER.
             return self.get_promotion(user_input)
 
         # Default: generic chat with the main assistant
-        return self._respond(user_text=user_input)
-
+        system_context = f"""
+        This is a customer service chat agent which can help with tracking ordered items 
+        and getting recommendations on the product catalog. Kindly ask if the user
+        needs help in either of these categories. Keep the tone warm and outdoorsy.
+        """
+        return self._respond(user_text=user_input, system_text=system_context)
 
 # -----------------------------
 # Entrypoint
